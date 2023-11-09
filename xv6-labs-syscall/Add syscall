@@ -1,0 +1,11 @@
+user/user.h
+user/user.pl
+kernel/syscall.h
+
+also:
+kernel/syscall.c
+kernel/defs.h  [optional]
+
+add protocol in:
+kernel/sysproc.c
+
