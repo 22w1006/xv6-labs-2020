@@ -1,1 +1,1 @@
-Unable to initialize device PRN
+See branches for every single lab's details.
