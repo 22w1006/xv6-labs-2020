@@ -103,9 +103,13 @@ struct proc {
   struct context context;      // swtch() here to run process
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
+  char name[16];               // Process name (debugging)
   
   // User added
-  struct usyscall *usyscall;
+  int interval;
+  int since_interval;
+  void (*handler)();
+  int running_handler;
+  struct trapframe trapframe_;
   
-  char name[16];               // Process name (debugging)
 };

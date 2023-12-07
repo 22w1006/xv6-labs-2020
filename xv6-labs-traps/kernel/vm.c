@@ -15,69 +15,6 @@ extern char etext[];  // kernel.ld sets this to end of kernel code.
 
 extern char trampoline[]; // trampoline.S
 
-//user added
-void vmprint_recursive(pagetable_t pagetable, int how_many_dots);
-
-void 
-vmprint(pagetable_t pagetable)
-{
-  printf("page table %p\n", pagetable);
-  
-  uint64 pa;
-  int how_many_dots = 0;
-  // there are 2^9 = 512 PTEs in a page table.
-  for(int i = 0; i < 512; i++){
-    pte_t pte = pagetable[i];
-    if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){
-      for(int i = how_many_dots; i > 0; --i){
-        printf(".. ");
-      }
-      printf("..%d: pte %p pa %p\n", i, pte, pa = PTE2PA(pte));
-      // this PTE points to a lower-level page table.
-      uint64 child = PTE2PA(pte);
-      vmprint_recursive((pagetable_t)child, how_many_dots + 1);
-    }
-    else if((pte & PTE_V) && !((pte & (PTE_R|PTE_W|PTE_X)) == 0)){
-      // this PTE do NOT point to a lower-level page table.
-      for(int i = how_many_dots; i > 0; --i){
-        printf(".. ");
-      }
-      printf("..%d: pte %p pa %p\n", i, pte, pa = PTE2PA(pte));
-    }
-  }
-  return;
-}
-void
-vmprint_recursive(pagetable_t pagetable, int how_many_dots)
-{
-  uint64 pa;
-  // there are 2^9 = 512 PTEs in a page table.
-  for(int i = 0; i < 512; i++){
-    pte_t pte = pagetable[i];
-    //if(i==509)
-      //printf("509 Found: pte = %p  pa = %p\n", pte, PTE2PA(pte));
-    if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){
-      for(int i = how_many_dots; i > 0; --i){
-        printf(".. ");
-      }
-      printf("..%d: pte %p pa %p\n", i, pte, pa = PTE2PA(pte));
-      // this PTE points to a lower-level page table.
-      uint64 child = PTE2PA(pte);
-      vmprint_recursive((pagetable_t)child, how_many_dots + 1);
-      continue;
-    }
-    else if((pte & PTE_V) && !((pte & (PTE_R|PTE_W|PTE_X)) == 0)){
-      // this PTE do NOT point to a lower-level page table.
-      for(int i = how_many_dots; i > 0; --i){
-        printf(".. ");
-      }
-      printf("..%d: pte %p pa %p\n", i, pte, pa = PTE2PA(pte));
-    }
-  }
-  return;
-}
-
-
 // Make a direct-map page table for the kernel.
 pagetable_t
 kvmmake(void)

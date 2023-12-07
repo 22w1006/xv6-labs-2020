@@ -9,8 +9,7 @@ struct sleeplock;
 struct stat;
 struct superblock;
 
-// User added
-void            vmprint(pagetable_t);
+void            backtrace(void);
 
 // bio.c
 void            binit(void);

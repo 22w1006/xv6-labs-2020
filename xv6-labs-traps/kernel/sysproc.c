@@ -1,10 +1,37 @@
 #include "types.h"
 #include "riscv.h"
-#include "param.h"
 #include "defs.h"
+#include "param.h"
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+
+// User added
+uint64
+sys_sigalarm(void)
+{
+  int interval;
+  uint64 p;
+  argint(0, &interval);
+  argaddr(1, &p);
+  if(interval != 0){
+    myproc()->interval = interval;
+    myproc()->since_interval = 0;
+    myproc()->running_handler = 0;
+    myproc()->handler = (void *)p;
+  }
+  return 0;
+}
+
+uint64
+sys_sigreturn(void)
+{
+  myproc()->since_interval = 0;
+  myproc()->running_handler = 0;
+  *(myproc()->trapframe) = myproc()->trapframe_;
+  return 0;
+}
+
 
 uint64
 sys_exit(void)
@@ -51,11 +78,13 @@ sys_sbrk(void)
 uint64
 sys_sleep(void)
 {
+  backtrace();
   int n;
   uint ticks0;
 
-
   argint(0, &n);
+  if(n < 0)
+    n = 0;
   acquire(&tickslock);
   ticks0 = ticks;
   while(ticks - ticks0 < n){
@@ -66,48 +95,9 @@ sys_sleep(void)
     sleep(&ticks, &tickslock);
   }
   release(&tickslock);
-  return 0;
-}
-
-
-#ifdef LAB_PGTBL
-int
-sys_pgaccess(void)
-{
-  // lab pgtbl: your code here.
-  uint64 s_addr;
-  int n;
-  uint64 out;
-  argaddr(0, &s_addr);
-  argint(1, &n);
-  argaddr(2, &out);
-  
-  if(n > 64){
-    printf("Error: can't detect more than 64 pages at one time, you require to detect [%d] pages!\n", n);
-    return -1;
-  }
-  
-  printf("%p %d %p\n", s_addr, n, out);
-  pagetable_t pagetable = myproc()->pagetable;
-  uint64 res = 0;
-  
-  for(int i = 0; i < n; ++i){
-    pte_t *p = walk(pagetable, s_addr + PGSIZE * i, 0);
-    // Accessed
-    if(*p & PTE_A){
-      *p &= ~PTE_A;
-      res |= (1L << i);
-    }
-  }
-  
-  if(copyout(myproc()->pagetable, out, (char *) &res, sizeof(uint64)) < 0){
-    panic("copyout[sysproc.c:104]");
-    return -1;
-  }
   
   return 0;
 }
-#endif
 
 uint64
 sys_kill(void)
