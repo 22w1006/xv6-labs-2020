@@ -16,6 +16,8 @@
 #include "file.h"
 #include "fcntl.h"
 
+static struct inode* create(char *path, short type, short major, short minor);
+
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
 static int
@@ -50,6 +52,34 @@ fdalloc(struct file *f)
   }
   return -1;
 }
+
+uint64
+sys_symlink(void)
+{
+  char target[MAXPATH];
+  char path[MAXPATH];
+
+  if(argstr(0, target, MAXPATH) < 0 || argstr(1, path, MAXPATH) < 0)
+    return -1;
+
+  begin_op();
+  struct inode* ip;
+  if((ip = create(path, T_SYMLINK, 0, 0)) == 0){
+    end_op();
+    return -1;
+  }
+  
+  if(writei(ip, 0, (uint64)target, 0, MAXPATH) < MAXPATH){
+    iunlockput(ip);
+    end_op();
+    return -1;
+  }
+  
+  iunlockput(ip);
+  end_op();
+  return 0;
+}
+
 
 uint64
 sys_dup(void)
@@ -328,6 +358,36 @@ sys_open(void)
       return -1;
     }
     ilock(ip);
+    
+    if(((omode & O_NOFOLLOW) == 0) && ip->type == T_SYMLINK){
+      char path[MAXPATH];
+      for(int i = 0; i < 10; ++i){
+        if(readi(ip, 0, (uint64)path, 0, MAXPATH) < MAXPATH){
+          iunlockput(ip);
+          end_op();
+          return -1;
+        }
+        iunlockput(ip);
+        
+        if((ip = namei(path)) == 0){
+          end_op();
+          return -1;
+        }
+        ilock(ip);
+        
+        if(ip->type != T_SYMLINK){
+          break;
+        }
+      }
+      if(ip->type == T_SYMLINK){
+        iunlockput(ip);
+  		end_op();
+  		return -1;
+  	  }
+    }
+    
+    
+    
     if(ip->type == T_DIR && omode != O_RDONLY){
       iunlockput(ip);
       end_op();

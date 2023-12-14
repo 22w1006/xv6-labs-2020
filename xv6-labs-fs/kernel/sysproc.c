@@ -6,33 +6,6 @@
 #include "spinlock.h"
 #include "proc.h"
 
-// User added
-uint64
-sys_sigalarm(void)
-{
-  int interval;
-  uint64 p;
-  argint(0, &interval);
-  argaddr(1, &p);
-  if(interval != 0){
-    myproc()->interval = interval;
-    myproc()->since_interval = 0;
-    myproc()->running_handler = 0;
-    myproc()->handler = (void *)p;
-  }
-  return 0;
-}
-
-uint64
-sys_sigreturn(void)
-{
-  myproc()->since_interval = 0;
-  myproc()->running_handler = 0;
-  *(myproc()->trapframe) = myproc()->trapframe_;
-  return 0;
-}
-
-
 uint64
 sys_exit(void)
 {
@@ -78,7 +51,6 @@ sys_sbrk(void)
 uint64
 sys_sleep(void)
 {
-  backtrace();
   int n;
   uint ticks0;
 
@@ -95,7 +67,6 @@ sys_sleep(void)
     sleep(&ticks, &tickslock);
   }
   release(&tickslock);
-  
   return 0;
 }
 
