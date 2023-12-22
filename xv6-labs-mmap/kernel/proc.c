@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "fcntl.h"
 
 struct cpu cpus[NCPU];
 
@@ -237,6 +238,10 @@ userinit(void)
   p = allocproc();
   initproc = p;
   
+  for (int i = 0; i < 16; ++i){
+    p->vmas[i].valid = 1;
+  }
+  
   // allocate one user page and copy initcode's instructions
   // and data into it.
   uvmfirst(p->pagetable, initcode, sizeof(initcode));
@@ -320,6 +325,11 @@ fork(void)
 
   acquire(&np->lock);
   np->state = RUNNABLE;
+  for (int i = 0; i < 16; ++i){
+    memmove(&(np->vmas[i]), &(p->vmas[i]), sizeof(p->vmas[i]));
+    if(p->vmas[i].valid == 0)
+      filedup(p->vmas[i].file);
+  }
   release(&np->lock);
 
   return pid;
@@ -360,6 +370,16 @@ exit(int status)
     }
   }
 
+  for (int i = 0; i < 16; ++i){
+    if(p->vmas[i].valid == 0){
+      if(p->vmas[i].flags & MAP_SHARED){
+        filewrite(p->vmas[i].file, p->vmas[i].addr, p->vmas[i].len);
+      }
+      fileclose(p->vmas[i].file);
+      uvmunmap(p->pagetable, p->vmas[i].addr, p->vmas[i].len/PGSIZE, 1);
+      p->vmas[i].valid = 1;
+    }
+  }
   begin_op();
   iput(p->cwd);
   end_op();

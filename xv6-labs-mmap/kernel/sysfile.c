@@ -16,8 +16,6 @@
 #include "file.h"
 #include "fcntl.h"
 
-static struct inode* create(char *path, short type, short major, short minor);
-
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
 static int
@@ -54,32 +52,87 @@ fdalloc(struct file *f)
 }
 
 uint64
-sys_symlink(void)
+sys_mmap(void)
 {
-  char target[MAXPATH];
-  char path[MAXPATH];
-
-  if(argstr(0, target, MAXPATH) < 0 || argstr(1, path, MAXPATH) < 0)
-    return -1;
-
-  begin_op();
-  struct inode* ip;
-  if((ip = create(path, T_SYMLINK, 0, 0)) == 0){
-    end_op();
-    return -1;
+  uint64 addr;
+  int prot, len, fd, flags, offset;
+  struct file *file;
+  
+  argaddr(0, &addr);
+  argint(1, &len);
+  argint(2, &prot);
+  argint(3, &flags);
+  argint(5, &offset);
+  
+  if(argfd(4, &fd, &file) < 0) {
+  	 return -1;  	 
   }
   
-  if(writei(ip, 0, (uint64)target, 0, MAXPATH) < MAXPATH){
-    iunlockput(ip);
-    end_op();
+  if((!file->writable) && (prot & PROT_WRITE) && (flags == MAP_SHARED))
     return -1;
+  
+  struct proc *p = myproc();
+  len = PGROUNDUP(len);
+  if(p->sz + len > MAXVA)
+    return -1;
+    
+  for(int i = 0; i < 16; ++i){
+    if(p->vmas[i].valid == 1){
+      p->vmas[i].valid = 0;
+      p->vmas[i].addr = p->sz;
+      p->vmas[i].prot = prot;
+      p->vmas[i].len = len;
+      p->vmas[i].flags = flags;
+      p->vmas[i].offset = offset;
+      p->vmas[i].fd = fd;
+      p->vmas[i].file = file;
+      filedup(file);
+      p->sz += len;
+      return p->vmas[i].addr;
+    }
   }
   
-  iunlockput(ip);
-  end_op();
-  return 0;
+  return -1;
 }
 
+uint64
+sys_munmap(void)
+{
+  uint64 addr;
+  int len;
+  
+  argaddr(0, &addr);
+  argint(1, &len);
+  
+  addr = PGROUNDDOWN(addr);
+  len = PGROUNDUP(len);
+  
+  struct vma *vma = 0;
+  struct proc *p = myproc();
+  for(int i = 0; i < 16; ++i){
+    if((addr >= p->vmas[i].addr) && (addr < p->vmas[i].addr + p->vmas[i].len)){
+      vma = &p->vmas[i];
+      break;
+    }
+  }
+  
+  if(vma){
+    if(vma->addr == addr){
+      vma->addr += len;
+      vma->len -= len;
+      if(vma->prot & PROT_WRITE){
+        filewrite(vma->file, addr, len);
+      }
+      uvmunmap(p->pagetable, addr, len/PGSIZE, 1);
+      if(!vma->len){
+        fileclose(vma->file);
+        vma->valid = 1;
+      }
+    }
+  }
+  
+  return 0;
+}
 
 uint64
 sys_dup(void)
@@ -358,36 +411,6 @@ sys_open(void)
       return -1;
     }
     ilock(ip);
-    
-    if(((omode & O_NOFOLLOW) == 0) && ip->type == T_SYMLINK){
-      char path[MAXPATH];
-      for(int i = 0; i < 10; ++i){
-        if(readi(ip, 0, (uint64)path, 0, MAXPATH) < MAXPATH){
-          iunlockput(ip);
-          end_op();
-          return -1;
-        }
-        iunlockput(ip);
-        
-        if((ip = namei(path)) == 0){
-          end_op();
-          return -1;
-        }
-        ilock(ip);
-        
-        if(ip->type != T_SYMLINK){
-          break;
-        }
-      }
-      if(ip->type == T_SYMLINK){
-        iunlockput(ip);
-  		end_op();
-  		return -1;
-  	  }
-    }
-    
-    
-    
     if(ip->type == T_DIR && omode != O_RDONLY){
       iunlockput(ip);
       end_op();

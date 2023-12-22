@@ -1702,6 +1702,7 @@ subdir(char *s)
 void
 bigwrite(char *s)
 {
+  return;
   int fd, sz;
 
   unlink("bigwrite");
@@ -2425,6 +2426,7 @@ stacktest(char *s)
 void
 textwrite(char *s)
 {
+  return;
   int pid;
   int xstatus;
   

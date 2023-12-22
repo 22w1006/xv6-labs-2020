@@ -34,6 +34,7 @@ entry("chdir");
 entry("dup");
 entry("getpid");
 entry("sbrk");
+entry("mmap");
+entry("munmap");
 entry("sleep");
 entry("uptime");
-entry("symlink");
